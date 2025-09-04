@@ -25,14 +25,29 @@ body {
   background: #2563eb;
   color: #fff;
   padding: 1rem 2rem;
-  text-align: center;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
 }
 
 .header h1 {
   font-size: 1.8rem;
   font-weight: 700;
-  margin-bottom: 1rem;
+}
+
+.student-tag {
+  font-size: 1rem;
+  font-weight: 500;
+  background: #f3f4f6;
+  color: #111827;
+  padding: 0.4rem 0.8rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
 }
 
 /* === Search Bar Section === */
@@ -41,30 +56,49 @@ body {
   flex-wrap: wrap;
   justify-content: center;
   gap: 0.75rem;
+  position: relative;
+  align-items: center;
 }
 
-.search-input-wrapper {
-  position: relative;
+/* 🔹 Merged Search Box + Button */
+.search-merged {
+  display: flex;
+  align-items: center;
+  border: 2px solid #d1d5db;
+  border-radius: 8px;
+  overflow: visible; /* allow dropdowns to overflow */
+  background: #fff;
   flex: 1;
   max-width: 420px;
+  position: relative; /* dropdowns positioned relative to this */
+  z-index: 30;
 }
 
-.search-input-wrapper input {
-  width: 100%;
-  padding: 0.75rem 1rem;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 1rem;
-  transition: border 0.2s ease, box-shadow 0.2s ease;
-}
-
-.search-input-wrapper input:focus {
+.search-merged input {
+  flex: 1;
+  border: none;
   outline: none;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37,99,235,0.2);
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  background: transparent;
 }
 
-/* === Buttons === */
+.search-merged .search-btn {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.25rem;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background 0.3s;
+  border-left: 1px solid rgba(0,0,0,0.05);
+}
+
+.search-merged .search-btn:hover {
+  background: #0056b3;
+}
+
+/* === Buttons (defaults) === */
 button {
   padding: 0.65rem 1.25rem;
   font-size: 0.95rem;
@@ -87,10 +121,34 @@ button.active {
   box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 
-/* === Search History Dropdown === */
-.history-list {
+/* === Special Buttons === */
+.home-btn {
+  background: #10b981; /* green */
+}
+.home-btn:hover {
+  background: #059669;
+}
+
+.favorites-btn {
+  background: #f59e0b; /* amber */
+}
+.favorites-btn:hover {
+  background: #d97706;
+}
+
+.recents-btn {
+  background: #c8e205;
+}
+.recents-btn:hover {
+  background: #9cd811;
+}
+
+/* === Dropdown base styles (history & suggestions) === */
+/* They are positioned relative to .search-merged */
+.history-list,
+.suggestions-list {
   position: absolute;
-  top: 110%;
+  top: calc(100% + 8px); /* below merged input */
   left: 0;
   right: 0;
   background: #fff;
@@ -101,35 +159,47 @@ button.active {
   list-style: none;
   max-height: 240px;
   overflow-y: auto;
-  z-index: 50;
+  z-index: 60;
+  padding: 0;
 }
 
+/* Make sure dropdown aligns with search area and doesn't overflow mobile */
+.search-merged .history-list,
+.search-merged .suggestions-list {
+  left: 0;
+  right: 0;
+}
+
+/* History items */
 .history-item {
   padding: 0.65rem 1rem;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background 0.12s ease;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .history-item:hover {
-  background: #aa9797;
+  background: #e0e7ff;
 }
 
 .history-term {
   flex-grow: 1;
   color: #333;
-  margin-right: 160px; /* ✅ adds spacing from the "x" */
+  word-break: break-word;
 }
 
 .remove-btn {
   font-size: 16px;
   color: #888;
-  margin-left: 8px; /* ✅ extra buffer */
+  margin-left: 8px;
   cursor: pointer;
-  transition: color 0.2s ease-in-out;
+  transition: color 0.15s ease-in-out;
 }
 
 .remove-btn:hover {
-  color: #e74c3c; /* subtle red on hover */
+  color: #e74c3c;
 }
 
 .clear-history {
@@ -143,6 +213,20 @@ button.active {
 
 .clear-history:hover {
   background: #fee2e2;
+}
+
+/* Suggestions items */
+.suggestions-list li {
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+  transition: background 0.12s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.suggestions-list li:hover {
+  background: #e0e7ff;
 }
 
 /* === Main Content === */
@@ -219,6 +303,13 @@ button.active {
   color: #fbbf24;
   -webkit-text-stroke: 1.5px #fbbf24;
   text-shadow: 0 0 10px rgba(251,191,36,0.6);
+  animation: pop 0.25s ease;
+}
+
+@keyframes pop {
+  50% {
+    transform: scale(1.3);
+  }
 }
 
 /* === Recents Section === */
@@ -226,9 +317,15 @@ button.active {
   grid-column: 1 / -1;
 }
 
+.recents-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
 .recents-section h2 {
   font-size: 1.4rem;
-  margin-bottom: 1rem;
   color: #1f2937;
 }
 
@@ -236,6 +333,56 @@ button.active {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 1.25rem;
+}
+
+.clear-recents-btn {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+  border: none;
+  border-radius: 6px;
+  background: #e74c3c;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.clear-recents-btn:hover {
+  background: #c0392b;
+}
+
+/* === Timestamp === */
+.timestamp {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-top: 0.25rem;
+  font-style: italic;
+}
+
+/* === Loading State === */
+.loading {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #2563eb;
+}
+
+.loading::after {
+  content: "";
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  margin-left: 8px;
+  border: 2px solid #2563eb;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* === Responsive Design === */
@@ -255,10 +402,33 @@ button.active {
   }
 }
 
+/* Mobile: merge search bar and button */
+@media (max-width: 600px) {
+  .search-bar {
+    display: flex;
+    flex-wrap: nowrap;
+    width: 100%;
+    gap: 0.5rem;
+  }
+
+  .search-merged {
+    flex: 1;
+  }
+
+  .search-merged input {
+    border-radius: 6px 0 0 6px;
+  }
+
+  .search-merged .search-btn {
+    border-radius: 0 6px 6px 0;
+  }
+}
+
 @media (max-width: 480px) {
   .search-bar {
     flex-direction: column;
     align-items: stretch;
+    gap: 0.5rem;
   }
 
   button {
@@ -270,32 +440,13 @@ button.active {
   }
 }
 
-/* Recents Header */
-.recents-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.clear-recents-btn {
-  padding: 0.4rem 0.8rem;
-  font-size: 0.85rem;
-  border: none;
-  border-radius: 6px;
-  background: #e74c3c;
-  color: #fff;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-.clear-recents-btn:hover {
-  background: #c0392b;
-}
-
-/* Timestamp */
-.timestamp {
-  font-size: 0.8rem;
-  color: #6b7280;
-  margin-top: 0.25rem;
+@media (max-width: 400px) {
+  .search-merged input {
+    font-size: 0.9rem;
+    padding: 0.6rem;
+  }
+  .search-merged .search-btn {
+    padding: 0.6rem 1rem;
+    font-size: 0.9rem;
+  }
 }

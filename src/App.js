@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import "./App.css";
 
+const MIN_SUGGESTION_LEN = 2; // show suggestions when query length >= this
+
 const App = () => {
   const [query, setQuery] = useState("");
   const [books, setBooks] = useState([]);
@@ -9,20 +11,28 @@ const App = () => {
   const [showFavorites, setShowFavorites] = useState(false);
   const [showRecents, setShowRecents] = useState(false);
   const [searchHistory, setSearchHistory] = useState([]);
-  const [showHistory, setShowHistory] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // Suggestions + focus/hover state
+  const [suggestions, setSuggestions] = useState([]);
+  const [inputFocused, setInputFocused] = useState(false);
+  const [isHovered, setIsHovered] = useState(false); // hover over search area
 
   // Fetch books
   const fetchBooks = useCallback(async (searchQuery) => {
     const url = searchQuery
-      ? `https://openlibrary.org/search.json?q=${searchQuery}`
+      ? `https://openlibrary.org/search.json?q=${encodeURIComponent(searchQuery)}`
       : `https://openlibrary.org/search.json?q=classic+books`;
 
     try {
+      setLoading(true);
       const res = await fetch(url);
       const data = await res.json();
       setBooks(data.docs || []);
     } catch (err) {
       console.error("Error fetching books:", err);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -41,11 +51,35 @@ const App = () => {
     localStorage.setItem("recentBooks", JSON.stringify(recents));
   }, [recents]);
 
+  // Fetch suggestions when typing (debounced)
+  useEffect(() => {
+    if (query.length < MIN_SUGGESTION_LEN) {
+      setSuggestions([]);
+      return;
+    }
+
+    const fetchSuggestions = async () => {
+      try {
+        const res = await fetch(
+          `https://openlibrary.org/search.json?q=${encodeURIComponent(query)}&limit=6`
+        );
+        const data = await res.json();
+        const titles = [...new Set(data.docs.map((b) => b.title).filter(Boolean))].slice(0, 6);
+        setSuggestions(titles);
+      } catch (err) {
+        console.error("Error fetching suggestions:", err);
+      }
+    };
+
+    const t = setTimeout(fetchSuggestions, 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
   // Save search to history
   const saveSearchHistory = (term) => {
-    if (!term.trim()) return;
+    if (!term || !term.trim()) return;
     let updated = [term, ...searchHistory.filter((t) => t !== term)];
-    updated = updated.slice(0, 10); // limit 10
+    updated = updated.slice(0, 10);
     setSearchHistory(updated);
     localStorage.setItem("searchHistory", JSON.stringify(updated));
   };
@@ -56,7 +90,7 @@ const App = () => {
     localStorage.removeItem("searchHistory");
   };
 
-  // Handle search
+  // Handle search form submit
   const handleSearch = (e) => {
     e.preventDefault();
     if (!query.trim()) return;
@@ -64,7 +98,18 @@ const App = () => {
     saveSearchHistory(query);
     setShowFavorites(false);
     setShowRecents(false);
-    setShowHistory(false);
+    setSuggestions([]);
+    setInputFocused(false);
+    setIsHovered(false);
+  };
+
+  // Handle selecting a suggestion (use onMouseDown so handler runs before blur)
+  const handleSuggestionSelect = (title) => {
+    // Update query, run search and keep dropdown visible so user can click more
+    setQuery(title);
+    fetchBooks(title);
+    saveSearchHistory(title);
+    setInputFocused(true);
   };
 
   // Click a history item
@@ -72,9 +117,7 @@ const App = () => {
     setQuery(term);
     fetchBooks(term);
     saveSearchHistory(term);
-    setShowFavorites(false);
-    setShowRecents(false);
-    setShowHistory(false);
+    setInputFocused(true);
   };
 
   // Remove single history item
@@ -88,9 +131,7 @@ const App = () => {
   const toggleFavorite = (book) => {
     setFavorites((prev) => {
       const exists = prev.some((fav) => fav.key === book.key);
-      return exists
-        ? prev.filter((fav) => fav.key !== book.key)
-        : [...prev, book];
+      return exists ? prev.filter((fav) => fav.key !== book.key) : [...prev, book];
     });
   };
 
@@ -102,10 +143,7 @@ const App = () => {
     };
 
     setRecents((prev) => {
-      const updated = [
-        withTimestamp,
-        ...prev.filter((r) => r.key !== book.key),
-      ].slice(0, 10);
+      const updated = [withTimestamp, ...prev.filter((r) => r.key !== book.key)].slice(0, 10);
       return updated;
     });
   };
@@ -116,59 +154,118 @@ const App = () => {
     localStorage.removeItem("recentBooks");
   };
 
+  // Reset to Home — CLEAR search box + suggestions/history overlays
+  const handleHomeClick = () => {
+    setShowFavorites(false);
+    setShowRecents(false);
+    fetchBooks("");
+    // Clear search input and hide dropdowns
+    setQuery("");
+    setSuggestions([]);
+    setInputFocused(false);
+    setIsHovered(false);
+  };
+
   // Which books to show
   const displayedBooks = showFavorites ? favorites : books;
+
+  // Derived booleans for dropdown visibility
+  const showSuggestionsDropdown = (inputFocused || isHovered) && suggestions.length > 0 && query.length >= MIN_SUGGESTION_LEN;
+  const showHistoryDropdown = (inputFocused || isHovered) && query.length === 0 && searchHistory.length > 0;
 
   return (
     <div className="app">
       <header className="header">
-        <h1>📚 Book Finder</h1>
-        <form onSubmit={handleSearch} className="search-bar">
-          <div className="search-input-wrapper">
+        <div className="header-top">
+          <h1>📚 Book Finder</h1>
+          <span className="student-tag">👤 Alex (Student)</span>
+        </div>
+
+        <form onSubmit={handleSearch} className="search-bar" autoComplete="off">
+          {/* Home Button */}
+          <button type="button" className="home-btn" onClick={handleHomeClick}>
+            Home 🏠
+          </button>
+
+          {/* Merged Search Box + Button */}
+          <div
+            className="search-merged"
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+          >
             <input
               type="text"
-              placeholder="Search for books..."
+              placeholder="Hi Alex, Search for books..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              onFocus={() => setShowHistory(true)}
-              onBlur={() => setTimeout(() => setShowHistory(false), 200)}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => {
+                // small delay lets onMouseDown handlers run first
+                setTimeout(() => {
+                  // only clear focus if not hovering
+                  if (!isHovered) setInputFocused(false);
+                }, 120);
+              }}
             />
+            <button type="submit" className="search-btn">
+              Search
+            </button>
 
-            {showHistory && (
-              <ul className="history-list">
-                {searchHistory.length > 0 ? (
-                  <>
-                    {searchHistory.map((term, index) => (
-                      <li key={index} className="history-item">
-                        <span
-                          className="history-term"
-                          onClick={() => handleHistoryClick(term)}
-                        >
-                          {term}
-                        </span>
-                        <span
-                          className="remove-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeHistoryItem(term);
-                          }}
-                        >
-                          ✕
-                        </span>
-                      </li>
-                    ))}
-                    <li className="clear-history" onClick={clearHistory}>
-                      Clear All History
-                    </li>
-                  </>
-                ) : (
-                  <li className="clear-history">No history found</li>
-                )}
+            {/* History Dropdown (shown when focused/hovered and query empty) */}
+            {showHistoryDropdown && (
+              <ul className="history-list" role="listbox">
+                {searchHistory.map((term, index) => (
+                  <li key={index} className="history-item">
+                    <span
+                      className="history-term"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleHistoryClick(term);
+                      }}
+                    >
+                      {term}
+                    </span>
+                    <span
+                      className="remove-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeHistoryItem(term);
+                      }}
+                      aria-label={`Remove ${term} from history`}
+                    >
+                      ✕
+                    </span>
+                  </li>
+                ))}
+                <li
+                  className="clear-history"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    clearHistory();
+                  }}
+                >
+                  Clear All History
+                </li>
+              </ul>
+            )}
+
+            {/* Suggestions Dropdown */}
+            {showSuggestionsDropdown && (
+              <ul className="suggestions-list" role="listbox">
+                {suggestions.map((title, index) => (
+                  <li
+                    key={index}
+                    onMouseDown={(e) => {
+                      e.preventDefault(); // prevent blur
+                      handleSuggestionSelect(title);
+                    }}
+                  >
+                    {title}
+                  </li>
+                ))}
               </ul>
             )}
           </div>
-
-          <button type="submit">Search</button>
 
           <button
             type="button"
@@ -195,13 +292,16 @@ const App = () => {
       </header>
 
       <main className="results">
-        {!showRecents ? (
+        {/* Loading State */}
+        {loading ? (
+          <p className="loading">⏳ Fetching books, please wait...</p>
+        ) : !showRecents ? (
           displayedBooks.length > 0 ? (
             displayedBooks.map((book) => {
               const isFavorited = favorites.some((fav) => fav.key === book.key);
               return (
                 <div
-                  key={book.key}
+                  key={book.key || `${book.title}-${Math.random()}`}
                   className="book-card"
                   onClick={() => handleBookClick(book)}
                 >
@@ -209,7 +309,7 @@ const App = () => {
                     src={
                       book.cover_i
                         ? `https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg`
-                        : "https://via.placeholder.com/150x200?text=No+Cover"
+                        : "https://placehold.co/150x200?text=No+Cover"
                     }
                     alt={book.title}
                     className="book-cover"
@@ -253,7 +353,7 @@ const App = () => {
                       src={
                         book.cover_i
                           ? `https://covers.openlibrary.org/b/id/${book.cover_i}-M.jpg`
-                          : "https://via.placeholder.com/150x200?text=No+Cover"
+                          : "https://placehold.co/150x200?text=No+Cover"
                       }
                       alt={book.title}
                       className="book-cover"
