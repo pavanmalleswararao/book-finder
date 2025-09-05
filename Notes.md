@@ -65,14 +65,3 @@ Direct links to client routes serve index (check _redirects).
 
 External metadata fetched (inspect network calls).
 
-Short changelog template (copy & paste)
-
-vX.Y.Z — YYYY-MM-DD
-
-Feature: Search(src/components/SearchBar).
-
-Feature: recently viewed (src/components/RecentlyViewed).
-
-Perf: Lazy-loaded covers (src/components/BookCard).
-
-Deploy: Added Netlify _redirects.
